@@ -1,10 +1,14 @@
 {
-	"name": "io.pinf.pio.profile",
-	"version": "0.1.0",
+  "name": "io.pinf.pio.profile",
+  "version": "0.1.0",
   "main": "plugin.js",
   "config": {
     "pio.deploy.converter": {
       "name": "nodejs-lib"
     }
+  },
+  "dependencies": {
+    "aws-sdk": "^2.1.27",
+    "uuid": "^2.0.1"
   }
 }
