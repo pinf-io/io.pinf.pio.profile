@@ -172,7 +172,7 @@ exports.for = function (API) {
 					secret = UUID.v4() + "-" + UUID.v4();
 					API.console.verbose(("Storing secret in keychain under: " + where + " (" + label + ")").magenta);
 					return KEYCHAIN.set(label, account, where, secret).then(function () {
-						return ensureKeyInKeychain(secret);
+						return ensureSecretInKeychain(secret);
 					});
 				});
 			}
