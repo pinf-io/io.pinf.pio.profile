@@ -269,20 +269,20 @@ exports.for = function (API) {
 								}
 				            	var encrypted = info[0];
 				            	var remoteFileMtime = info[1];
+			                	API.console.debug("remoteFileMtime", remoteFileMtime);
+			                	API.console.debug("fileMtime", fileMtime);
+			                	// We upload if the local file has changed from previous turn.
 								if (
 									previousResolvedConfig &&
 									previousResolvedConfig.files &&
 									previousResolvedConfig.files[filename] &&
-									previousResolvedConfig.files[filename].remoteMtime
+									previousResolvedConfig.files[filename].localMtime
 								) {
-									if (remoteFileMtime < previousResolvedConfig.files[filename].remoteMtime) {
-										API.console.verbose("Upload reason: Remote file mtime '" + remoteFileMtime + "' is smaller than previous remote file mtime '" + previousResolvedConfig.files[filename].remoteMtime + "'.");
+				                	API.console.debug("previousResolvedConfig.files[" + filename + "].localMtime", previousResolvedConfig.files[filename].localMtime);
+				                	if (fileMtime !== previousResolvedConfig.files[filename].localMtime) {
+										API.console.verbose("Upload reason: local file mtime '" + fileMtime + "' does not match previous local file mtime '" + previousResolvedConfig.files[filename].localMtime + "'.");
 										return upload();
-									}
-								} else
-								if (remoteFileMtime < fileMtime) {
-									API.console.verbose("Upload reason: Remote file mtime '" + remoteFileMtime + "' is smaller than local mtime '" + fileMtime + "'.");
-									return upload();
+				                	}
 								}
 				                return decrypt(encrypted).then(function (decrypted) {
 				                	API.console.verbose(("Writing downloaded profile managed file after decrypting to: " + fileinfo.path).magenta);
