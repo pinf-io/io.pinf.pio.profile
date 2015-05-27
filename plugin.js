@@ -114,6 +114,33 @@ exports.for = function (API) {
 			activatePathFromProfilePath: function (partiallyResolvedConfig, profilePath) {
 				return profilePath.replace(/\.profile\.json$/, ".activate.sh");
 			}
+/*			
+PINF.json
+            "keys": {
+                "io.pinf.pio": "{{generateKeyPairIfNoPrevious(io.pinf.pio)}}"
+            }
+
+			generateKeyPairIfNoPrevious: function (partiallyResolvedConfig, keyName) {
+				if (
+					previousResolvedConfig &&
+					previousResolvedConfig.keys &&
+					previousResolvedConfig.keys[keyName]
+				) {
+					return previousResolvedConfig.keys[keyName];
+				}
+				return API.ASYNC([
+					"FORGE"
+				], function (FORGE) {
+
+console.log("keyName", keyName);
+
+console.log("FORGE", FORGE);
+console.log("generateKeyPairIfNoPrevious", partiallyResolvedConfig);
+process.exit(1);
+
+				});
+			}
+*/			
 		}).then(function (resolvedConfig) {
 
 			resolvedConfig.keyPubPath = resolvedConfig.keyPath + ".pub";
@@ -152,6 +179,27 @@ exports.for = function (API) {
 					});
 				}
 				return API.Q.resolve();
+			}
+
+			function ensurePublicPem () {
+				// TODO: Cache this if private key path and value has not changed.
+				return API.ASYNC([
+					"FORGE"
+				], function (FORGE) {
+					var privateKey = API.FS.readFileSync(resolvedConfig.keyPath, "utf8");
+					var privateKeyObject = FORGE.pki.privateKeyFromAsn1(
+						FORGE.asn1.fromDer(
+							FORGE.util.decode64(
+								privateKey
+								.match(/^-----BEGIN RSA PRIVATE KEY-----\n([^-]+)\n-----END RSA PRIVATE KEY-----\n?$/)[1]
+								.replace(/\n/g, "")
+							)
+						)
+					);
+					var publicKeyObject = FORGE.pki.rsa.setPublicKey(privateKeyObject.n, privateKeyObject.e);
+
+					resolvedConfig.keyPubPem = FORGE.pki.publicKeyToPem(publicKeyObject).replace(/\r\n/g, "\\n");
+				});
 			}
 
 			function ensureSecretInKeychain (verify) {
@@ -344,7 +392,10 @@ exports.for = function (API) {
 
 			}).then(function () {
 
-				return ensurePublicKey();
+				return ensurePublicKey().then(function () {
+
+					return ensurePublicPem();
+				});
 			}).then(function () {
 
 				return resolvedConfig;
