@@ -2,109 +2,6 @@
 
 exports.for = function (API) {
 
-	const KEYCHAIN = require("./keychain").for(API);
-	const SSH = require("./ssh").for(API);
-	const UUID = require("uuid");
-	const AWS = require("aws-sdk");
-
-
-	function forEachStore (resolvedConfig, multiCallback) {
-
-		var all = [];
-
-		function aws (config) {
-			// @see http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html
-
-		    API.ASSERT.equal(typeof config.iamUserName, "string");
-		    API.ASSERT.equal(typeof config.accessKeyId, "string");
-		    API.ASSERT.equal(typeof config.secretAccessKey, "string");
-		    API.ASSERT.equal(typeof config.s3, "object");
-		    API.ASSERT.equal(typeof config.s3.bucket, "string");
-		    API.ASSERT.equal(typeof config.s3.publicHost, "string");
-		    API.ASSERT.equal(typeof config.s3.path, "string");
-		    API.ASSERT.equal(typeof config.s3.region, "string");
-
-		    API.ASSERT.ok(/\.amazonaws\.com$/.test(config.s3.publicHost), "'publicHost' must end with '.amazonaws.com'");
-
-		    var awsConfig = new AWS.Config({
-		        accessKeyId: config.accessKeyId,
-		        secretAccessKey: config.secretAccessKey,
-		        region: config.s3.region
-		    });
-
-		    var s3 = new AWS.S3(awsConfig);
-
-		    var api = {
-		    	upload: function (filename, data) {
-			        return API.Q.denodeify(function (callback) {
-                    	API.console.verbose("Upload to bucket '" + config.s3.bucket + "'");
-			            return s3.putObject({
-			                ACL: "public-read",
-			                Bucket: config.s3.bucket,
-			                ContentType: "text/plain",
-			                Key: API.PATH.join(config.s3.path, filename),
-			                Body: new Buffer(data)
-			            }, function (err, data) {
-			                if (err) {
-			                    API.console.error("Error uploading to AWS using key:", config.accessKeyId);
-			                    return callback(err);
-			                }
-			                API.console.verbose("Uploaded profile to:", API.PATH.join(config.s3.bucket, config.s3.path, filename));
-			                return callback(null);
-			            });
-			        })();
-				},
-				download: function (filename) {
-			        return API.Q.denodeify(function (callback) {
-                    	API.console.verbose("Download from bucket '" + config.s3.bucket + "'");
-			            return s3.getObject({
-			                Bucket: config.s3.bucket,
-			                Key: API.PATH.join(config.s3.path, filename)
-			            }, function (err, data) {
-			                if (err) {
-			                    if (err.code === "NoSuchBucket") {
-			                    	API.console.verbose("Creating bucket '" + config.s3.bucket + "'");
-									return s3.createBucket({
-						                Bucket: config.s3.bucket,
-						                ACL: "public-read"
-						            }, function (err) {
-						            	if (err) {
-						            		if (err.code === "AccessDenied") {
-						            			API.console.error("ERROR: Cannot create bucket '" + config.s3.bucket + "'. Make sure AWS access key id '" + config.accessKeyId + "' for iam user '" + config.iamUserName + "' has proper security policy set: https://console.aws.amazon.com/iam/home#users");
-						            		}
-						            		return callback(err);
-						            	}
-				                        return callback(null, null);
-						            });
-			                    }
-			                    if (err.code === "NoSuchKey") {
-			                        return callback(null, null);
-			                    }
-			                    API.console.error("Error uploading to AWS using key:", config.accessKeyId);
-			                    return callback(err);
-			                }
-			                return callback(null, data.Body.toString(), new Date(data.LastModified).getTime());
-			            });
-			        })();
-				}
-		    }
-
-            API.console.verbose("For profile store: aws");
-
-		    all.push(API.Q.when(multiCallback(api))); 
-		}
-
-		for (var name in resolvedConfig.stores) {
-			if (name === "aws") {
-				aws(resolvedConfig.stores[name]);
-			} else {
-				throw new Error("Store '" + name + "' not supported!");
-			}
-		}
-
-		return API.Q.all(all);
-	}
-
 
 	var exports = {};
 
@@ -143,119 +40,30 @@ process.exit(1);
 */			
 		}).then(function (resolvedConfig) {
 
-			resolvedConfig.keyPubPath = resolvedConfig.keyPath + ".pub";
+console.log("PIO PROFILE", resolvedConfig);
 
-			function ensurePrivateKey (verify) {
-				// TODO: Add password to private key once we know that toolchain can use
-				//       password agent at all times (or export private key without password temporarily only)
-				if (!API.FS.existsSync(resolvedConfig.keyPath)) {
-					if (verify) {
-						throw new Error("Generated private key but could not find afterwards.");
-					}
-					if (API.FS.existsSync(resolvedConfig.keyPubPath)) {
-						API.FS.removeSync(resolvedConfig.keyPubPath);
-					}
-					return SSH.generateKeys(resolvedConfig.keyPath).then(function () {
-						if (API.FS.existsSync(resolvedConfig.keyPubPath)) {
-							API.FS.removeSync(resolvedConfig.keyPubPath);
-						}
-						return ensurePrivateKey(true);
-					});
-				}
-				return API.Q.resolve();
-			}
+			var origin = resolvedConfig['$space.pinf.genesis/origin/0'];
+			var originAccess = resolvedConfig['$space.pinf.genesis/access/0'];
 
-			function ensurePublicKey (verify) {
-				if (!API.FS.existsSync(resolvedConfig.keyPubPath)) {
-					if (verify) {
-						throw new Error("Generated public key but could not find afterwards.");
-					}
-					return SSH.exportPublicKeyFromPrivateKey(
-						resolvedConfig.keyPath,
-						resolvedConfig.keyPubPath,
-						resolvedConfig.keyName + "@profile.pio.pinf.io"
-					).then(function () {
-						return ensurePublicKey(verify);
-					});
-				}
-				return API.Q.resolve();
-			}
+/*
+			return origin.getPublicKeyPath().then(function (keyPubPath) {
 
-			function ensurePublicPem () {
-				// TODO: Cache this if private key path and value has not changed.
-				return API.ASYNC([
-					"FORGE"
-				], function (FORGE) {
-					var privateKey = API.FS.readFileSync(resolvedConfig.keyPath, "utf8");
-					var privateKeyObject = FORGE.pki.privateKeyFromAsn1(
-						FORGE.asn1.fromDer(
-							FORGE.util.decode64(
-								privateKey
-								.match(/^-----BEGIN RSA PRIVATE KEY-----\n([^-]+)\n-----END RSA PRIVATE KEY-----\n?$/)[1]
-								.replace(/\n/g, "")
-							)
-						)
-					);
-					var publicKeyObject = FORGE.pki.rsa.setPublicKey(privateKeyObject.n, privateKeyObject.e);
+				resolvedConfig.keyPubPath = keyPubPath;
 
-					resolvedConfig.keyPubPem = FORGE.pki.publicKeyToPem(publicKeyObject).replace(/\r\n/g, "\\n");
+			}).then(function () {
+
+				return origin.getPublicPem().then(function (keyPubPem) {
+
+					resolvedConfig.keyPubPem = keyPubPem;
 				});
-			}
 
-			function ensureSecretInKeychain (verify) {
-				var account = "profile.pio.pinf.io";
-				var where = resolvedConfig.keyName;
-				var label = account + ": " + where;
-				return KEYCHAIN.get(account, where).then(function(secret) {
-					if (
-						secret &&
-						(!verify || verify === secret)
-					) {
-						return secret;
-					}
-					if (verify) {
-						throw new Error("We stored new secret in keychain but cannot retrieve it again.");
-					}
-					API.console.verbose(("No existing secret found in keychain. Generating one.").magenta);
-					secret = UUID.v4() + "-" + UUID.v4();
-					API.console.verbose(("Storing secret in keychain under: " + where + " (" + label + ")").magenta);
-					return KEYCHAIN.set(label, account, where, secret).then(function () {
-						return ensureSecretInKeychain(secret);
-					});
-				});
-			}
+			}).then(function () {
+*/
+				function ensureProfileSynced () {
 
-			function ensureProfileSynced (secret) {
+				    return API.Q.fcall(function() {
 
-			    return API.Q.fcall(function() {
-
-				    API.ASSERT.equal(typeof resolvedConfig.files, "object");
-
-			        var secretHash = API.CRYPTO.createHash("sha256").update(resolvedConfig.keyId + ":" + secret).digest();
-
-			        function encrypt (decrypted) {
-			            return API.Q.denodeify(API.CRYPTO.randomBytes)(32).then(function (buffer) {
-			                var iv = API.CRYPTO.createHash("md5");
-			                iv.update(buffer.toString("hex") + ":" + config.profileKey);
-			                iv = iv.digest();
-			                var encrypt = API.CRYPTO.createCipheriv('aes-256-cbc', secretHash, iv);
-			                var encrypted = encrypt.update(decrypted, 'utf8', 'binary');
-			                encrypted += encrypt.final('binary');
-			                return iv.toString('hex') + ":" + new Buffer(encrypted, 'binary').toString('base64');
-			            });
-			        }
-
-			        function decrypt (encrypted) {
-			            return API.Q.fcall(function () {
-			                encrypted = encrypted.split(":");
-			                var decrypt = API.CRYPTO.createDecipheriv('aes-256-cbc', secretHash, new Buffer(encrypted.shift(), 'hex'));
-			                var decrypted = decrypt.update(new Buffer(encrypted.join(":"), 'base64').toString('binary'), 'binary', 'utf8');
-			                decrypted += decrypt.final('utf8');
-			                return decrypted;
-			            });
-			        }
-
-					return forEachStore(resolvedConfig, function (api) {
+					    API.ASSERT.equal(typeof resolvedConfig.files, "object");
 
 						function syncFile (filename) {
 
@@ -292,10 +100,10 @@ process.exit(1);
 
 							function upload () {
 			                	API.console.verbose(("Uploading profile managed file: " + fileinfo.path).magenta);
-								return encrypt(API.FS.readFileSync(fileinfo.path)).then(function (encrypted) {
-				                    return api.upload(filename, encrypted).then(function () {
+								return origin.encrypt(API.FS.readFileSync(fileinfo.path)).then(function (encrypted) {
+				                    return originAccess.upload(filename, encrypted).then(function () {
 				                    	// TODO: Just call 'HEAD' to get mtime.
-							            return api.download(filename).then(function (info) {
+							            return originAccess.download(filename).then(function (info) {
 											API.console.verbose("Record mtime of file '" + fileinfo.path + "' as '" + info[1] + "'.");
 					                    	resolvedConfig.files[filename].remoteMtime = info[1];
 											resolvedConfig.files[filename].localMtime = fileMtime;
@@ -305,7 +113,7 @@ process.exit(1);
 				                });
 							}
 
-				            return api.download(filename).then(function (info) {
+				            return originAccess.download(filename).then(function (info) {
 								if (!info || !info[0]) {
 									// No profile found remotely so need to upload.
 									if (!fileExists) {
@@ -332,7 +140,7 @@ process.exit(1);
 										return upload();
 				                	}
 								}
-				                return decrypt(encrypted).then(function (decrypted) {
+				                return origin.decrypt(encrypted).then(function (decrypted) {
 				                	API.console.verbose(("Writing downloaded profile managed file after decrypting to: " + fileinfo.path).magenta);
 				                	try {
 					                    API.FS.outputFileSync(fileinfo.path, decrypted);
@@ -371,35 +179,17 @@ process.exit(1);
 				        	});
 				        });
 				        return done;
-					});
 
-			    }).fail(function(err) {
-			        err.mesage += " (while syncing profile)";
-			        err.stack += "\n(while syncing profile)";
-			        throw err;
-			    });
-			}
+				    }).fail(function(err) {
+				        err.mesage += " (while syncing profile)";
+				        err.stack += "\n(while syncing profile)";
+				        throw err;
+				    });
+				}
 
-			return ensureSecretInKeychain().then(function (secret) {
-
-				return ensureProfileSynced(secret).then(function () {
-
-					return ensurePrivateKey().then(function () {
-
-						return ensureProfileSynced(secret);
-					});
+				return ensureProfileSynced().then(function () {
+					return resolvedConfig;
 				});
-
-			}).then(function () {
-
-				return ensurePublicKey().then(function () {
-
-					return ensurePublicPem();
-				});
-			}).then(function () {
-
-				return resolvedConfig;
-			});
 		});
 	}
 

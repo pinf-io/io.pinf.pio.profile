@@ -2,13 +2,24 @@
   "name": "io.pinf.pio.profile",
   "version": "0.1.0",
   "main": "plugin.js",
-  "config": {
-    "pio.deploy.converter": {
-      "name": "nodejs-lib"
-    }
-  },
   "dependencies": {
     "aws-sdk": "^2.1.27",
     "uuid": "^2.0.1"
-  }
+  },
+  "config": {
+    "org.pinf.genesis.lib/0": {
+      "api": {
+        "provides": {
+          "space.pinf.genesis-origin": "./api/space.pinf.genesis-origin.js",
+          "space.pinf.genesis-access": "./api/space.pinf.genesis-access.js"
+        },
+        "consumes": {
+          "config": "org.pinf.genesis.lib/0/config",
+          "ASSERT": "assert",
+          "KEYCHAIN": "./keychain.js",
+          "AWS": "aws-sdk"
+        }
+      }
+    }
+  }  
 }
