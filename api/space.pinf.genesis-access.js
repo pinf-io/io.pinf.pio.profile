@@ -26,6 +26,8 @@ require('org.pinf.genesis.lib/lib/api').forModule(require, module, function (API
 
 		    this.config = config;
 
+		    // TODO: Delegate request signing to 'space.pinf.genesis/access/0' so we don't
+		    //       need credentials here and potentially leak them.
 		    this.awsConfig = new API.AWS.Config({
 		        accessKeyId: config.accessKeyId,
 		        secretAccessKey: config.secretAccessKey,
