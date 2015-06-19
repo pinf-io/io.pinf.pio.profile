@@ -40,7 +40,7 @@ process.exit(1);
 */			
 		}).then(function (resolvedConfig) {
 
-console.log("PIO PROFILE", resolvedConfig);
+//console.log("PIO PROFILE", resolvedConfig);
 
 			var origin = resolvedConfig['$space.pinf.genesis/origin/0'];
 			var originAccess = resolvedConfig['$space.pinf.genesis/access/0'];
