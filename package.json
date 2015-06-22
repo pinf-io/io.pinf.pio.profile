@@ -17,7 +17,8 @@
           "config": "org.pinf.genesis.lib/0/config",
           "ASSERT": "assert",
           "KEYCHAIN": "./keychain.js",
-          "AWS": "aws-sdk"
+          "AWS": "aws-sdk",
+          "UUID": "uuid"
         }
       }
     }

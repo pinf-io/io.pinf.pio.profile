@@ -24,7 +24,7 @@ require('org.pinf.genesis.lib/lib/api').forModule(require, module, function (API
 			}
 			API.console.verbose(("No existing secret found in keychain. Generating one.").magenta);
 
-			secret = UUID.v4() + "-" + UUID.v4();
+			secret = API.UUID.v4() + "-" + API.UUID.v4();
 			API.console.verbose(("Storing secret in keychain under: " + where + " (" + label + ")").magenta);
 			return KEYCHAIN.set(label, account, where, secret).then(function () {
 				return self.getSecretCode(secret);
