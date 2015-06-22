@@ -104,6 +104,7 @@ process.exit(1);
 				                    return originAccess.upload(filename, encrypted).then(function () {
 				                    	// TODO: Just call 'HEAD' to get mtime.
 							            return originAccess.download(filename).then(function (info) {
+							            	if (!info) return;
 											API.console.verbose("Record mtime of file '" + fileinfo.path + "' as '" + info[1] + "'.");
 					                    	resolvedConfig.files[filename].remoteMtime = info[1];
 											resolvedConfig.files[filename].localMtime = fileMtime;

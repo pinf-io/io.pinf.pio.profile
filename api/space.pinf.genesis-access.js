@@ -11,45 +11,55 @@ require('org.pinf.genesis.lib/lib/api').forModule(require, module, function (API
 
 		var S3 = function (config) {
 
-			// @see http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html
-
-		    API.ASSERT.equal(typeof config.iamUserName, "string");
-		    API.ASSERT.equal(typeof config.accessKeyId, "string");
-		    API.ASSERT.equal(typeof config.secretAccessKey, "string");
-		    API.ASSERT.equal(typeof config.s3, "object");
-		    API.ASSERT.equal(typeof config.s3.bucket, "string");
-		    API.ASSERT.equal(typeof config.s3.publicHost, "string");
-		    API.ASSERT.equal(typeof config.s3.path, "string");
-		    API.ASSERT.equal(typeof config.s3.region, "string");
-
-		    API.ASSERT.ok(/\.amazonaws\.com$/.test(config.s3.publicHost), "'publicHost' must end with '.amazonaws.com'");
-
 		    this.config = config;
 
-		    // TODO: Delegate request signing to 'space.pinf.genesis/access/0' so we don't
-		    //       need credentials here and potentially leak them.
-		    this.awsConfig = new API.AWS.Config({
-		        accessKeyId: config.accessKeyId,
-		        secretAccessKey: config.secretAccessKey,
-		        region: config.s3.region
-		    });
+		    this.getConnection = function () {
 
-		    this.s3 = new API.AWS.S3(this.awsConfig);
+		    	if (!config.secretAccessKey) {
+		    		return null;
+		    	}
+
+				// @see http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html
+
+			    API.ASSERT.equal(typeof config.iamUserName, "string");
+			    API.ASSERT.equal(typeof config.accessKeyId, "string");
+			    API.ASSERT.equal(typeof config.secretAccessKey, "string");
+			    API.ASSERT.equal(typeof config.s3, "object");
+			    API.ASSERT.equal(typeof config.s3.bucket, "string");
+			    API.ASSERT.equal(typeof config.s3.publicHost, "string");
+			    API.ASSERT.equal(typeof config.s3.path, "string");
+			    API.ASSERT.equal(typeof config.s3.region, "string");
+
+			    API.ASSERT.ok(/\.amazonaws\.com$/.test(config.s3.publicHost), "'publicHost' must end with '.amazonaws.com'");
+
+			    // TODO: Delegate request signing to 'space.pinf.genesis/access/0' so we don't
+			    //       need credentials here and potentially leak them.
+			    var awsConfig = new API.AWS.Config({
+			        accessKeyId: config.accessKeyId,
+			        secretAccessKey: config.secretAccessKey,
+			        region: config.s3.region
+			    });
+
+				return new API.AWS.S3(awsConfig);
+		    }
 		}
 		S3.prototype.download = function (filename) {
 			var self = this;
 
+			var s3 = self.getConnection();
+			if (!s3) return API.Q.resolve(null);
+
 	        return API.Q.denodeify(function (callback) {
 	        	API.console.verbose("Download from bucket '" + self.config.s3.bucket + "'");
 
-	            return self.s3.getObject({
+	            return s3.getObject({
 	                Bucket: self.config.s3.bucket,
 	                Key: API.PATH.join(self.config.s3.path, filename)
 	            }, function (err, data) {
 	                if (err) {
 	                    if (err.code === "NoSuchBucket") {
 	                    	API.console.verbose("Creating bucket '" + self.config.s3.bucket + "'");
-							return self.s3.createBucket({
+							return s3.createBucket({
 				                Bucket: self.config.s3.bucket,
 				                ACL: "public-read"
 				            }, function (err) {
@@ -74,9 +84,13 @@ require('org.pinf.genesis.lib/lib/api').forModule(require, module, function (API
 		}
 		S3.prototype.upload = function (filename, data) {
 			var self = this;
+
+			var s3 = self.getConnection();
+			if (!s3) return API.Q.resolve(null);
+
 	        return API.Q.denodeify(function (callback) {
             	API.console.verbose("Upload to bucket '" + self.config.s3.bucket + "'");
-	            return self.s3.putObject({
+	            return s3.putObject({
 	                ACL: "public-read",
 	                Bucket: self.config.s3.bucket,
 	                ContentType: "text/plain",
