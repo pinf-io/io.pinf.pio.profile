@@ -75,7 +75,8 @@ require('org.pinf.genesis.lib/lib/api').forModule(require, module, function (API
 	                    if (err.code === "NoSuchKey") {
 	                        return callback(null, null);
 	                    }
-	                    API.console.error("Error uploading to AWS using key:", self.config.accessKeyId);
+	                    API.console.error("Error downloading from AWS S3 using key:", self.config.accessKeyId);
+	                    console.error("ERROR", err.code, err.stack);
 	                    return callback(err);
 	                }
 	                return callback(null, data.Body.toString(), new Date(data.LastModified).getTime());
